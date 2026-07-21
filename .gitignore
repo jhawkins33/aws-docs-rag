@@ -1,0 +1,32 @@
+# --- Python ---
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# --- Secrets / local config ---
+.env
+
+# --- Terraform ---
+# State lives remotely in S3 (aws-docs-rag-tfstate) — no local copies committed.
+infrastructure/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+crash.log
+
+# --- Source doc repos (cloned externally, not our code) ---
+# These are full external git repos (SageMaker docs, Terraform provider docs).
+# Re-clone via the commands in README.md rather than committing them.
+data/sagemaker-docs/
+data/terraform-provider-aws/
+
+# --- Generated data ---
+# Regenerable via src/chunk.py — no need to version.
+data/chunks.jsonl
+
+# --- OS / editor cruft ---
+.DS_Store
+.vscode/
+.idea/
