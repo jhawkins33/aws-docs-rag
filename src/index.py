@@ -18,7 +18,7 @@ load_dotenv()
 
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 PROFILE = os.environ.get("AWS_PROFILE", "churn-mlops-personal")
-OPENSEARCH_ENDPOINT = os.environ["OPENSEARCH_ENDPOINT"]  # from terraform output, without https://
+OPENSEARCH_ENDPOINT = os.environ["OPENSEARCH_ENDPOINT"]
 INDEX_NAME = "docs-index"
 EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIM = 1024
@@ -77,6 +77,8 @@ def ensure_index(opensearch):
                     "text": {"type": "text"},
                     "source": {"type": "keyword"},
                     "file": {"type": "keyword"},
+                    "chunk_index": {"type": "integer"},
+                    "total_chunks_in_file": {"type": "integer"},
                 }
             },
         },
@@ -109,11 +111,13 @@ def main():
                 "text": chunk["text"],
                 "source": chunk["source"],
                 "file": chunk["file"],
+                "chunk_index": chunk["chunk_index"],
+                "total_chunks_in_file": chunk["total_chunks_in_file"],
             },
         )
         if (i + 1) % 25 == 0 or (i + 1) == len(chunks):
             print(f"  {i + 1}/{len(chunks)} indexed")
-        time.sleep(0.05)  # light throttling to avoid API rate limits
+        time.sleep(0.05)
 
     print("Done.")
 

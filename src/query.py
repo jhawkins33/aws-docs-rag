@@ -1,7 +1,8 @@
 """
 Queries the RAG pipeline: embeds a question, retrieves the most
-relevant chunks from OpenSearch, and asks Bedrock Claude to answer
-using only that retrieved context.
+relevant chunks from OpenSearch (plus their immediate neighbors from
+the same source file), and asks Bedrock Claude to answer using only
+that retrieved context.
 
 Usage:
     python src/query.py "How do I deploy a SageMaker endpoint?"
@@ -52,6 +53,33 @@ def embed_text(bedrock, text):
     return result["embedding"]
 
 
+def fetch_neighbors(opensearch, chunk):
+    """Fetch the chunk immediately before and after this one in the same file."""
+    neighbors = []
+    for offset in (-1, 1):
+        neighbor_idx = chunk["chunk_index"] + offset
+        if neighbor_idx < 0 or neighbor_idx >= chunk["total_chunks_in_file"]:
+            continue
+        response = opensearch.search(
+            index=INDEX_NAME,
+            body={
+                "size": 1,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"term": {"file": chunk["file"]}},
+                            {"term": {"chunk_index": neighbor_idx}},
+                        ]
+                    }
+                },
+            },
+        )
+        hits = response["hits"]["hits"]
+        if hits:
+            neighbors.append(hits[0]["_source"])
+    return neighbors
+
+
 def retrieve(opensearch, bedrock, question, k=TOP_K):
     query_embedding = embed_text(bedrock, question)
     response = opensearch.search(
@@ -61,7 +89,18 @@ def retrieve(opensearch, bedrock, question, k=TOP_K):
             "query": {"knn": {"embedding": {"vector": query_embedding, "k": k}}},
         },
     )
-    return [hit["_source"] for hit in response["hits"]["hits"]]
+    top_hits = [hit["_source"] for hit in response["hits"]["hits"]]
+
+    seen = {(c["file"], c["chunk_index"]) for c in top_hits}
+    expanded = list(top_hits)
+    for chunk in top_hits:
+        for neighbor in fetch_neighbors(opensearch, chunk):
+            key = (neighbor["file"], neighbor["chunk_index"])
+            if key not in seen:
+                seen.add(key)
+                expanded.append(neighbor)
+
+    return expanded
 
 
 def generate_answer(bedrock, question, chunks):
@@ -96,11 +135,12 @@ def main():
 
     bedrock, opensearch = get_clients()
 
-    print(f"Retrieving top {TOP_K} chunks for: {args.question}\n")
+    print(f"Retrieving top {TOP_K} chunks (plus neighbors) for: {args.question}\n")
     chunks = retrieve(opensearch, bedrock, args.question)
+    print(f"Retrieved {len(chunks)} chunks total.\n")
 
     for i, c in enumerate(chunks):
-        print(f"--- Chunk {i+1}: {c['source']}/{c['file']} ---")
+        print(f"--- Chunk {i+1}: {c['source']}/{c['file']} (index {c['chunk_index']}) ---")
         print(c["text"][:200] + "...\n")
 
     print("Generating answer...\n")

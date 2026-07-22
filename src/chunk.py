@@ -55,14 +55,19 @@ def split_long_section(text: str):
 def chunk_file(path: Path, source: str):
     text = path.read_text(encoding="utf-8", errors="ignore")
     sections = split_by_headers(text)
-    chunks = []
+    pieces = []
     for section in sections:
-        for piece in split_long_section(section):
-            chunks.append({
-                "source": source,
-                "file": path.name,
-                "text": piece,
-            })
+        pieces.extend(split_long_section(section))
+
+    chunks = []
+    for idx, piece in enumerate(pieces):
+        chunks.append({
+            "source": source,
+            "file": path.name,
+            "text": piece,
+            "chunk_index": idx,
+            "total_chunks_in_file": len(pieces),
+        })
     return chunks
 
 
