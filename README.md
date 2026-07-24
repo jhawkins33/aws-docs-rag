@@ -98,7 +98,16 @@ python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
 - OpenSearch Serverless vector-search collections don't support custom document IDs on indexing — IDs must be auto-assigned; custom IDs go in the document body as a regular field instead
 - AWS archived their public docs-on-GitHub repos in 2023; content that appears in search results as "at master" can be misleading if the *default* branch was repointed elsewhere during the archive
 - Bedrock model IDs are date-stamped snapshots that get retired — and newer/larger Claude models often require a cross-region inference profile prefix (`us.`) rather than direct on-demand invocation
-- **Retrieval can miss the most relevant chunk from a document it partially retrieves.** Asking "what arguments does `aws_iam_role` support?" retrieved that file's intro/note section instead of its actual Argument Reference section — a different chunk from the same file that scored lower and fell outside top-k. The model correctly said the context didn't contain a full answer rather than hallucinating one, but the retrieval gap itself is a real limitation worth fixing (see Roadmap: neighbor-chunk retrieval, higher top-k, finer-grained chunking)
+- **A single retrieval technique isn't enough for every failure mode — and diagnosing *why* matters more than adding more techniques blindly.** I traced one specific query ("what arguments does `aws_iam_role` support?") through three progressively more sophisticated retrieval strategies:
+  1. **Pure vector search** (top-3): retrieved the file's intro section, missed the actual Argument Reference section — it was 10 chunks away in an 18-chunk file, well outside typical top-k.
+  2. **+ Neighbor-chunk retrieval** (±1 adjacent chunks): correctly expanded whatever was found into its complete surrounding context, but a 10-chunk gap is far outside a ±1 window — didn't close the gap.
+  3. **+ Hybrid search** (BM25 keyword + vector similarity, fused via OpenSearch's normalization processor): improved retrieval quality broadly, but for this specific query, still centered on the intro chunk. Bumping `k` from 3 to 8 didn't help either — it surfaced six *other* IAM resources' "Argument Reference" sections, never the correct one.
+
+  **Root cause, confirmed by direct diagnostic queries against the index**: `aws_iam_role` is a common token that appears throughout the corpus as a cross-reference (assumed-role principals, examples, related resources), and "Argument Reference" is generic boilerplate present in nearly every Terraform resource doc. Neither signal is discriminative enough on its own to disambiguate *this specific resource's* section from dozens of lexically-similar candidates elsewhere in the corpus.
+
+  In every case, the model correctly said the context was insufficient rather than hallucinating an answer — across all three retrieval strategies, on this query, zero false answers.
+
+  **Real fixes for this failure class** (not implemented, documented as next steps): metadata filtering (detect the resource name in the question, filter/boost chunks from the matching file before ranking), query rewriting (reformulate natural questions into phrasing closer to how docs are actually written), and reranking (retrieve a larger candidate set, then use a cross-encoder or LLM call to re-score specifically for relevance to the named entity).
 
 ## Roadmap
 
@@ -107,7 +116,11 @@ python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
 - [x] Embedding + vector indexing (Bedrock Titan + OpenSearch)
 - [x] Retrieval + grounded generation (Claude via Bedrock)
 - [x] Validated against real queries — confirmed correct answers, correct corpus selection, and honest "insufficient context" responses rather than hallucination
-- [ ] Neighbor-chunk retrieval (pull adjacent chunks when one from a file scores highly)
+- [x] Neighbor-chunk retrieval (pull adjacent chunks when one from a file scores highly)
+- [x] Hybrid search (BM25 + vector, fused via OpenSearch Serverless search pipeline) — implemented and validated; genuinely improves retrieval broadly, but documented investigation shows it doesn't solve every gap (see "What I learned")
+- [ ] Metadata filtering (detect resource/entity names in the question, filter or boost chunks from the matching source file)
+- [ ] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
+- [ ] Reranking (retrieve a larger candidate set, re-score with a cross-encoder or LLM call for relevance to the named entity)
 - [ ] Evaluation harness (measure retrieval relevance / answer quality systematically)
 - [ ] Simple query interface (CLI polish or a minimal web UI)
 - [ ] Incremental re-indexing (currently full-rebuild only)

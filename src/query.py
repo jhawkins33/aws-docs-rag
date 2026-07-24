@@ -79,7 +79,62 @@ def fetch_neighbors(opensearch, chunk):
             neighbors.append(hits[0]["_source"])
     return neighbors
 
+SEARCH_PIPELINE_NAME = "hybrid-search-pipeline"
 
+
+def ensure_search_pipeline(opensearch):
+    """
+    Create the search pipeline that normalizes and combines BM25
+    (keyword) and k-NN (vector) scores for hybrid search. Idempotent —
+    safe to call every run.
+    """
+    body = {
+        "description": "Normalize and combine BM25 + kNN scores for hybrid search",
+        "phase_results_processors": [
+            {
+                "normalization-processor": {
+                    "normalization": {"technique": "min_max"},
+                    "combination": {
+                        "technique": "arithmetic_mean",
+                        "parameters": {"weights": [0.3, 0.7]},
+                    },
+                }
+            }
+        ],
+    }
+    opensearch.transport.perform_request(
+        "PUT", f"/_search/pipeline/{SEARCH_PIPELINE_NAME}", body=body
+    )
+
+
+def hybrid_retrieve(opensearch, bedrock, question, k=TOP_K):
+    """
+    Retrieve using hybrid search: BM25 keyword match + k-NN vector
+    similarity, combined via the search pipeline's weighted average
+    (30% keyword, 70% vector — vector still leads, but exact term
+    matches like "Argument Reference" now get real weight too).
+    """
+    query_embedding = embed_text(bedrock, question)
+
+    body = {
+        "size": k,
+        "query": {
+            "hybrid": {
+                "queries": [
+                    {"match": {"text": {"query": question}}},
+                    {"knn": {"embedding": {"vector": query_embedding, "k": k}}},
+                ]
+            }
+        },
+    }
+
+    response = opensearch.search(
+        index=INDEX_NAME,
+        body=body,
+        params={"search_pipeline": SEARCH_PIPELINE_NAME},
+    )
+    
+    return [hit["_source"] for hit in response["hits"]["hits"]]
 def retrieve(opensearch, bedrock, question, k=TOP_K):
     query_embedding = embed_text(bedrock, question)
     response = opensearch.search(
@@ -136,7 +191,18 @@ def main():
     bedrock, opensearch = get_clients()
 
     print(f"Retrieving top {TOP_K} chunks (plus neighbors) for: {args.question}\n")
-    chunks = retrieve(opensearch, bedrock, args.question)
+    ensure_search_pipeline(opensearch)
+    top_hits = hybrid_retrieve(opensearch, bedrock, args.question, k=8)
+
+    # Expand with neighbors, same logic as pure-vector retrieve()
+    seen = {(c["file"], c["chunk_index"]) for c in top_hits}
+    chunks = list(top_hits)
+    for chunk in top_hits:
+        for neighbor in fetch_neighbors(opensearch, chunk):
+            key = (neighbor["file"], neighbor["chunk_index"])
+            if key not in seen:
+                seen.add(key)
+                chunks.append(neighbor)
     print(f"Retrieved {len(chunks)} chunks total.\n")
 
     for i, c in enumerate(chunks):
