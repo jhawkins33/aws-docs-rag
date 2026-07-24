@@ -107,7 +107,9 @@ python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
 
   In every case, the model correctly said the context was insufficient rather than hallucinating an answer — across all three retrieval strategies, on this query, zero false answers.
 
-  **Real fixes for this failure class** (not implemented, documented as next steps): metadata filtering (detect the resource name in the question, filter/boost chunks from the matching file before ranking), query rewriting (reformulate natural questions into phrasing closer to how docs are actually written), and reranking (retrieve a larger candidate set, then use a cross-encoder or LLM call to re-score specifically for relevance to the named entity).
+**Update — metadata filtering closed this gap.** I implemented the first of the three proposed fixes: detecting a Terraform resource name pattern (`aws_[a-z0-9_]+`) in the question, mapping it to its doc filename via Terraform's naming convention (`aws_iam_role` → `iam_role.html.markdown`), and adding that as a hard filter on both the BM25 and k-NN subqueries before scoring. Result: the target chunk (index 11) is now retrieved correctly, and the model produces a complete, accurate answer. Validated against a second resource (`aws_s3_bucket_versioning`) to confirm this generalizes rather than being a one-off fix, and confirmed the fallback path (no resource name detected) still works normally for non-Terraform questions. One real implementation snag along the way: OpenSearch's `hybrid` query type doesn't accept a top-level `filter` field (despite it appearing in some docs) — the fix was applying the filter to each subquery individually (a `bool`/`filter` wrapper around the BM25 match, and a `filter` parameter inside the `knn` clause) rather than at the hybrid level.
+
+Query rewriting and reranking remain as documented future work for failure modes this filter doesn't cover (e.g. non-Terraform questions, or questions that don't name a specific resource). 
 
 ## Roadmap
 
@@ -118,7 +120,7 @@ python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
 - [x] Validated against real queries — confirmed correct answers, correct corpus selection, and honest "insufficient context" responses rather than hallucination
 - [x] Neighbor-chunk retrieval (pull adjacent chunks when one from a file scores highly)
 - [x] Hybrid search (BM25 + vector, fused via OpenSearch Serverless search pipeline) — implemented and validated; genuinely improves retrieval broadly, but documented investigation shows it doesn't solve every gap (see "What I learned")
-- [ ] Metadata filtering (detect resource/entity names in the question, filter or boost chunks from the matching source file)
+- [x] Metadata filtering (detect resource/entity names in the question, filter or boost chunks from the matching source file)
 - [ ] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
 - [ ] Reranking (retrieve a larger candidate set, re-score with a cross-encoder or LLM call for relevance to the named entity)
 - [ ] Evaluation harness (measure retrieval relevance / answer quality systematically)

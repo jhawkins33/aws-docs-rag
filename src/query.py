@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import re
 import json
 import os
 import boto3
@@ -107,34 +108,74 @@ def ensure_search_pipeline(opensearch):
     )
 
 
+def extract_file_filter(question):
+    """
+    Detect a Terraform resource name (e.g. aws_iam_role) mentioned in
+    the question and map it to its corresponding doc filename, following
+    the Terraform provider docs' naming convention: aws_iam_role ->
+    iam_role.html.markdown. Scoped to Terraform docs only — SageMaker
+    doc filenames don't follow a predictable pattern from question text.
+    """
+    match = re.search(r"\baws_[a-z0-9_]+\b", question)
+    if not match:
+        return None
+    resource_name = match.group(0)
+    return resource_name[len("aws_"):] + ".html.markdown"
+
+
 def hybrid_retrieve(opensearch, bedrock, question, k=TOP_K):
     """
     Retrieve using hybrid search: BM25 keyword match + k-NN vector
-    similarity, combined via the search pipeline's weighted average
-    (30% keyword, 70% vector — vector still leads, but exact term
-    matches like "Argument Reference" now get real weight too).
+    similarity, combined via the search pipeline's weighted average.
+    If the question mentions a specific Terraform resource (e.g.
+    aws_iam_role), filter to only that resource's doc file first —
+    eliminates competition from other, lexically-similar resources.
     """
     query_embedding = embed_text(bedrock, question)
 
-    body = {
-        "size": k,
-        "query": {
-            "hybrid": {
-                "queries": [
-                    {"match": {"text": {"query": question}}},
-                    {"knn": {"embedding": {"vector": query_embedding, "k": k}}},
-                ]
+    file_filter = extract_file_filter(question)
+
+    match_query = {"match": {"text": {"query": question}}}
+    knn_query = {"knn": {"embedding": {"vector": query_embedding, "k": k}}}
+
+    if file_filter:
+        print(f"(filtering to file: {file_filter})")
+        match_query = {
+            "bool": {
+                "must": [match_query],
+                "filter": [{"term": {"file": file_filter}}],
             }
-        },
-    }
+        }
+        knn_query["knn"]["embedding"]["filter"] = {"term": {"file": file_filter}}
+
+    hybrid_query = {"queries": [match_query, knn_query]}
+
+    body = {"size": k, "query": {"hybrid": hybrid_query}}
 
     response = opensearch.search(
         index=INDEX_NAME,
         body=body,
         params={"search_pipeline": SEARCH_PIPELINE_NAME},
     )
-    
-    return [hit["_source"] for hit in response["hits"]["hits"]]
+    hits = [hit["_source"] for hit in response["hits"]["hits"]]
+
+    # If a confident filter produced zero results (e.g. the detected
+    # resource doesn't actually exist in this corpus), fall back to
+    # unfiltered hybrid search rather than returning nothing.
+    if file_filter and not hits:
+        print("(filter produced no results, falling back to unfiltered search)")
+        hybrid_query.pop("filter", None)
+        body = {"size": k, "query": {"hybrid": hybrid_query}}
+        response = opensearch.search(
+            index=INDEX_NAME,
+            body=body,
+            params={"search_pipeline": SEARCH_PIPELINE_NAME},
+        )
+        hits = [hit["_source"] for hit in response["hits"]["hits"]]
+
+    return hits
+
+
 def retrieve(opensearch, bedrock, question, k=TOP_K):
     query_embedding = embed_text(bedrock, question)
     response = opensearch.search(

@@ -39,7 +39,7 @@ def get_clients():
         use_ssl=True,
         verify_certs=True,
         connection_class=RequestsHttpConnection,
-        timeout=30,
+        timeout=60,
     )
     return bedrock, opensearch
 
