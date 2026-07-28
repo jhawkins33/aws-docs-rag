@@ -1,0 +1,42 @@
+[
+  {
+    "question": "What arguments does the aws_iam_role resource support?",
+    "expected_files": ["iam_role.html.markdown"],
+    "expected_keywords": ["assume_role_policy", "name", "path"]
+  },
+  {
+    "question": "What arguments does aws_s3_bucket_versioning support?",
+    "expected_files": ["s3_bucket_versioning.html.markdown"],
+    "expected_keywords": ["bucket", "versioning_configuration"]
+  },
+  {
+    "question": "How do I deploy a SageMaker model to a real-time endpoint?",
+    "expected_files": ["realtime-endpoints-deployment.md", "how-it-works-deployment.md"],
+    "expected_keywords": ["endpoint", "deploy"]
+  },
+  {
+    "question": "What arguments does aws_iam_role_policy_attachment support?",
+    "expected_files": ["iam_role_policy_attachment.html.markdown"],
+    "expected_keywords": ["role", "policy_arn"]
+  },
+  {
+    "question": "How does SageMaker Model Monitor detect data drift?",
+    "expected_files": ["model-monitor-data-capture-endpoint.md", "model-monitor-model-quality.md", "model-monitor-byoc-containers.md"],
+    "expected_keywords": ["drift", "monitor"]
+  },
+  {
+    "question": "What is a SageMaker serverless endpoint used for?",
+    "expected_files": ["serverless-endpoints.md"],
+    "expected_keywords": ["traffic", "scale"]
+  },
+  {
+    "question": "What arguments does aws_lambda_function_url support?",
+    "expected_files": [],
+    "expected_keywords": ["don't see", "no context", "provide"]
+  },
+  {
+    "question": "What's the difference between SageMaker real-time and serverless endpoints?",
+    "expected_files": ["realtime-endpoints-deployment.md", "serverless-endpoints.md"],
+    "expected_keywords": ["real-time", "serverless"]
+  }
+]

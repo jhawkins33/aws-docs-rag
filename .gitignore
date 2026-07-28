@@ -25,6 +25,8 @@ data/terraform-provider-aws/
 # --- Generated data ---
 # Regenerable via src/chunk.py — no need to version.
 data/chunks.jsonl
+data/chunks.jsonl
+data/eval_results.json
 
 # --- OS / editor cruft ---
 .DS_Store

@@ -111,6 +111,20 @@ python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
 
 Query rewriting and reranking remain as documented future work for failure modes this filter doesn't cover (e.g. non-Terraform questions, or questions that don't name a specific resource). 
 
+## Evaluation
+
+`src/evaluate.py` runs a fixed set of test questions through the full pipeline (hybrid search + metadata filtering + neighbor expansion + generation) and scores results against expected outcomes, defined in `tests/eval_questions.json`.
+
+Two metrics, deliberately lightweight and deterministic rather than LLM-judged:
+- **Retrieval hit rate**: did the expected source file actually appear among retrieved chunks?
+- **Keyword coverage**: what fraction of expected keywords appear in the generated answer?
+
+The test set includes one deliberate edge case — a resource that doesn't exist in the corpus (`aws_lambda_function_url`) — to verify the pipeline fails gracefully (declines to answer) rather than hallucinating. This case is excluded from the retrieval hit-rate metric (there's no correct file to hit) and evaluated only on whether the model's response reflects genuine uncertainty.
+
+**Current results**: 100% retrieval hit rate (7/7 substantive questions), 92% average keyword coverage.
+
+**A real limitation worth naming**: keyword coverage is an imperfect proxy for answer quality. One test initially scored 50% because the model gave a complete, accurate answer that simply didn't use my specific guessed phrasing ("cold start") for a question that hadn't actually asked about that topic. Keyword-based evaluation is cheap and deterministic, but it penalizes correct answers phrased differently than expected just as readily as it catches actually wrong ones — a real tradeoff against more expensive but more semantically aware evaluation approaches (e.g. LLM-as-judge), which is why this stays on the roadmap as a documented alternative rather than something dismissed outright.
+
 ## Roadmap
 
 - [x] Infrastructure as code (Terraform — OpenSearch Serverless, IAM, S3)
@@ -123,6 +137,6 @@ Query rewriting and reranking remain as documented future work for failure modes
 - [x] Metadata filtering (detect resource/entity names in the question, filter or boost chunks from the matching source file)
 - [ ] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
 - [ ] Reranking (retrieve a larger candidate set, re-score with a cross-encoder or LLM call for relevance to the named entity)
-- [ ] Evaluation harness (measure retrieval relevance / answer quality systematically)
+- [x] Evaluation harness (measure retrieval relevance / answer quality systematically)
 - [ ] Simple query interface (CLI polish or a minimal web UI)
 - [ ] Incremental re-indexing (currently full-rebuild only)
