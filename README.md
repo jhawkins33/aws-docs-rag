@@ -89,6 +89,16 @@ python src/index.py             # full run (~2,835 chunks, 15-30 min)
 python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
 ```
 
+## Web interface
+
+A Streamlit app (`app.py`) provides a browser-based UI on top of the same pipeline used by `src/query.py` — ask a question, get a grounded answer, and expand a "Retrieved N source chunks" panel to see exactly which documentation was used, with file and chunk-index provenance for every piece.
+
+```bash
+streamlit run app.py
+```
+
+Opens at `http://localhost:8501`. Uses `@st.cache_resource` to reuse the Bedrock/OpenSearch clients and search pipeline setup across questions in the same session, rather than re-establishing them on every query.
+
 ## Cost note
 
 **Unlike most portfolio infrastructure, OpenSearch Serverless bills continuously** — roughly $0.24/hour minimum for the 2 OCUs it requires, even fully idle. This is meaningfully different from typical pay-per-use AWS services (S3, Lambda, per-second SageMaker training jobs). Run `terraform destroy` in `infrastructure/` when not actively working on this project rather than leaving it running.
@@ -138,5 +148,5 @@ The test set includes one deliberate edge case — a resource that doesn't exist
 - [ ] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
 - [ ] Reranking (retrieve a larger candidate set, re-score with a cross-encoder or LLM call for relevance to the named entity)
 - [x] Evaluation harness (measure retrieval relevance / answer quality systematically)
-- [ ] Simple query interface (CLI polish or a minimal web UI)
+- [x] Simple query interface (CLI polish or a minimal web UI)
 - [ ] Incremental re-indexing (currently full-rebuild only)
