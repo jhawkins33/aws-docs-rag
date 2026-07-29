@@ -2,41 +2,49 @@
   {
     "question": "What arguments does the aws_iam_role resource support?",
     "expected_files": ["iam_role.html.markdown"],
-    "expected_keywords": ["assume_role_policy", "name", "path"]
+    "expected_keywords": ["assume_role_policy", "name", "path"],
+    "judge_criteria": "The answer should identify assume_role_policy as a required argument, and should list at least several optional arguments such as name, path, description, or tags."
   },
   {
     "question": "What arguments does aws_s3_bucket_versioning support?",
     "expected_files": ["s3_bucket_versioning.html.markdown"],
-    "expected_keywords": ["bucket", "versioning_configuration"]
+    "expected_keywords": ["bucket", "versioning_configuration"],
+    "judge_criteria": "The answer should mention bucket as a required argument and versioning_configuration as the core configuration block for controlling versioning state."
   },
   {
     "question": "How do I deploy a SageMaker model to a real-time endpoint?",
     "expected_files": ["realtime-endpoints-deployment.md", "how-it-works-deployment.md"],
-    "expected_keywords": ["endpoint", "deploy"]
+    "expected_keywords": ["endpoint", "deploy"],
+    "judge_criteria": "The answer should describe the general process of creating an endpoint configuration and endpoint, or using the SageMaker SDK's deploy() method, to serve real-time predictions."
   },
   {
     "question": "What arguments does aws_iam_role_policy_attachment support?",
     "expected_files": ["iam_role_policy_attachment.html.markdown"],
-    "expected_keywords": ["role", "policy_arn"]
+    "expected_keywords": ["role", "policy_arn"],
+    "judge_criteria": "The answer should identify role and policy_arn as the required arguments for attaching a managed policy to an IAM role."
   },
   {
     "question": "How does SageMaker Model Monitor detect data drift?",
     "expected_files": ["model-monitor-data-capture-endpoint.md", "model-monitor-model-quality.md", "model-monitor-byoc-containers.md"],
-    "expected_keywords": ["drift", "monitor"]
+    "expected_keywords": ["drift", "monitor"],
+    "judge_criteria": "The answer should explain that Model Monitor compares live inference data against a baseline (typically from training data) to detect statistical differences indicating drift."
   },
   {
     "question": "What is a SageMaker serverless endpoint used for?",
     "expected_files": ["serverless-endpoints.md"],
-    "expected_keywords": ["traffic", "scale"]
+    "expected_keywords": ["traffic", "scale"],
+    "judge_criteria": "The answer should explain that serverless endpoints are used for variable or unpredictable inference traffic, automatically scaling compute (including to zero) without manual instance management."
   },
   {
     "question": "What arguments does aws_lambda_function_url support?",
     "expected_files": [],
-    "expected_keywords": ["don't see", "no context", "provide"]
+    "expected_keywords": ["don't see", "no context", "provide"],
+    "judge_criteria": "The answer should honestly indicate that the provided context does not contain information about this resource, rather than inventing plausible-sounding argument names."
   },
   {
     "question": "What's the difference between SageMaker real-time and serverless endpoints?",
     "expected_files": ["realtime-endpoints-deployment.md", "serverless-endpoints.md"],
-    "expected_keywords": ["real-time", "serverless"]
+    "expected_keywords": ["real-time", "serverless"],
+    "judge_criteria": "The answer should contrast the two: real-time endpoints run on persistently provisioned instances for low, consistent latency, while serverless endpoints scale automatically (including to zero) and suit variable or infrequent traffic."
   }
 ]
