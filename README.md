@@ -123,17 +123,28 @@ Query rewriting and reranking remain as documented future work for failure modes
 
 ## Evaluation
 
-`src/evaluate.py` runs a fixed set of test questions through the full pipeline (hybrid search + metadata filtering + neighbor expansion + generation) and scores results against expected outcomes, defined in `tests/eval_questions.json`.
+`src/evaluate.py` runs a fixed set of test questions through the full pipeline (hybrid search + metadata filtering + neighbor expansion + generation) and scores results against expected outcomes defined in `tests/eval_questions.json`.
 
-Two metrics, deliberately lightweight and deterministic rather than LLM-judged:
-- **Retrieval hit rate**: did the expected source file actually appear among retrieved chunks?
-- **Keyword coverage**: what fraction of expected keywords appear in the generated answer?
+Two scoring modes, run together for comparison:
 
-The test set includes one deliberate edge case — a resource that doesn't exist in the corpus (`aws_lambda_function_url`) — to verify the pipeline fails gracefully (declines to answer) rather than hallucinating. This case is excluded from the retrieval hit-rate metric (there's no correct file to hit) and evaluated only on whether the model's response reflects genuine uncertainty.
+**Keyword coverage** (default): checks whether expected keywords appear in the generated answer. Fast, free, and perfectly deterministic — but can penalize a correct answer phrased differently than expected, and can reward a non-answer that happens to contain the right words.
 
-**Current results**: 100% retrieval hit rate (7/7 substantive questions), 92% average keyword coverage.
+**LLM-as-judge** (`--judge`): Claude evaluates whether the answer actually satisfies natural-language criteria for a correct response. More semantically aware than keyword matching, correctly handles graceful-failure cases, and catches substantive gaps that keyword coverage misses — at the cost of an extra Bedrock call per question and non-determinism between runs.
 
-**A real limitation worth naming**: keyword coverage is an imperfect proxy for answer quality. One test initially scored 50% because the model gave a complete, accurate answer that simply didn't use my specific guessed phrasing ("cold start") for a question that hadn't actually asked about that topic. Keyword-based evaluation is cheap and deterministic, but it penalizes correct answers phrased differently than expected just as readily as it catches actually wrong ones — a real tradeoff against more expensive but more semantically aware evaluation approaches (e.g. LLM-as-judge), which is why this stays on the roadmap as a documented alternative rather than something dismissed outright.
+```bash
+python src/evaluate.py                # keyword coverage only
+python src/evaluate.py --judge        # both metrics
+```
+
+**Current results** (8 questions, including 1 deliberate graceful-failure edge case):
+
+| Metric | Score |
+|---|---|
+| Retrieval hit rate | 100% (7/7 substantive questions) |
+| Avg keyword coverage | 92% |
+| LLM-judge pass rate | 88% (7/8) |
+
+**What the two metrics revealed together**: Question 5 (how SageMaker Model Monitor detects drift) scored 100% keyword coverage but FAIL from the judge — the answer contained the words "drift" and "monitor" but acknowledged the context didn't have full technical detail, rather than actually explaining the baseline-comparison mechanism. Keyword coverage was blind to this; the judge caught it. Conversely, Question 7 (a resource not in the corpus) scored 33% keyword coverage but PASS from the judge — the model correctly declined to answer rather than hallucinating, which is the right behavior. Running both metrics together gives a more complete picture than either alone.
 
 ## Roadmap
 
@@ -148,5 +159,6 @@ The test set includes one deliberate edge case — a resource that doesn't exist
 - [ ] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
 - [ ] Reranking (retrieve a larger candidate set, re-score with a cross-encoder or LLM call for relevance to the named entity)
 - [x] Evaluation harness (measure retrieval relevance / answer quality systematically)
+- [x] LLM-as-judge evaluation — implemented alongside keyword coverage; revealed a real quality gap (Model Monitor question) that keyword matching missed, and correctly handled graceful-failure cases that keyword matching under-scored
 - [x] Simple query interface (CLI polish or a minimal web UI)
 - [ ] Incremental re-indexing (currently full-rebuild only)
