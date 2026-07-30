@@ -249,6 +249,58 @@ Answer:"""
     )
     result = json.loads(response["body"].read())
     return result["content"][0]["text"]
+    
+def rerank_chunks(bedrock, question, chunks, threshold=3):
+    """
+    Score each retrieved chunk for relevance to the question using
+    Claude, then sort by score and filter out chunks below the
+    threshold. This gives generation a cleaner, more focused context.
+
+    Scoring scale: 1 (not relevant) to 5 (highly relevant).
+    Default threshold: 3 (keep chunks that are at least somewhat relevant).
+    """
+    if not chunks:
+        return chunks
+
+    scored = []
+    for chunk in chunks:
+        prompt = f"""Score the relevance of the following document chunk to the question on a scale of 1-5.
+
+1 = Not relevant at all
+2 = Slightly relevant
+3 = Somewhat relevant
+4 = Relevant
+5 = Highly relevant
+
+Question: {question}
+
+Document chunk (from {chunk['source']}/{chunk['file']}):
+{chunk['text'][:500]}
+
+Respond with ONLY a single integer (1, 2, 3, 4, or 5), nothing else."""
+
+        response = bedrock.invoke_model(
+            modelId=GENERATION_MODEL_ID,
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": prompt}],
+            }),
+        )
+        result = json.loads(response["body"].read())
+        raw = result["content"][0]["text"].strip()
+        try:
+            score = int(raw[0])
+        except (ValueError, IndexError):
+            score = 3  # default to neutral if unparseable
+
+        scored.append((score, chunk))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    reranked = [chunk for score, chunk in scored if score >= threshold]
+
+    print(f"  Reranking: {len(chunks)} chunks → {len(reranked)} kept (threshold={threshold})")
+    return reranked if reranked else [scored[0][1]]  # always keep at least 1
 
 
 def main():
@@ -279,6 +331,13 @@ def main():
         print(f"--- Chunk {i+1}: {c['source']}/{c['file']} (index {c['chunk_index']}) ---")
         print(c["text"][:200] + "...\n")
 
+    # Only rerank when there are enough chunks that filtering adds value.
+    # With fewer than 8 chunks, the context is already focused enough
+    # that reranking risks over-filtering marginally-relevant content.
+    if len(chunks) >= 8:
+        chunks = rerank_chunks(bedrock, args.question, chunks, threshold=2)
+    else:
+        print(f"  Skipping rerank ({len(chunks)} chunks — below threshold)")
     print("Generating answer...\n")
     answer = generate_answer(bedrock, args.question, chunks)
     print(f"ANSWER:\n{answer}")
