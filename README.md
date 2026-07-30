@@ -138,11 +138,13 @@ python src/evaluate.py --judge        # both metrics
 
 **Current results** (8 questions, including 1 deliberate graceful-failure edge case):
 
-| Metric | Score |
-|---|---|
-| Retrieval hit rate | 100% (7/7 substantive questions) |
-| Avg keyword coverage | 92% |
-| LLM-judge pass rate | 88% (7/8) |
+| Metric | Without query rewriting | With query rewriting |
+|---|---|---|
+| Retrieval hit rate | 100% (7/7) | 100% (7/7) |
+| Avg keyword coverage | 92% | 92% |
+| LLM-judge pass rate | 88% (7/8) | **100% (8/8)** |
+
+Query rewriting reformulates the user's natural-language question into doc-like phrasing before retrieval — bridging the vocabulary gap between how people ask and how documentation is written. The improvement in LLM-judge pass rate from 88% to 100% demonstrates that the rewritten queries pulled better context for the one question that previously failed (SageMaker Model Monitor drift detection).
 
 **What the two metrics revealed together**: Question 5 (how SageMaker Model Monitor detects drift) scored 100% keyword coverage but FAIL from the judge — the answer contained the words "drift" and "monitor" but acknowledged the context didn't have full technical detail, rather than actually explaining the baseline-comparison mechanism. Keyword coverage was blind to this; the judge caught it. Conversely, Question 7 (a resource not in the corpus) scored 33% keyword coverage but PASS from the judge — the model correctly declined to answer rather than hallucinating, which is the right behavior. Running both metrics together gives a more complete picture than either alone.
 
@@ -156,7 +158,7 @@ python src/evaluate.py --judge        # both metrics
 - [x] Neighbor-chunk retrieval (pull adjacent chunks when one from a file scores highly)
 - [x] Hybrid search (BM25 + vector, fused via OpenSearch Serverless search pipeline) — implemented and validated; genuinely improves retrieval broadly, but documented investigation shows it doesn't solve every gap (see "What I learned")
 - [x] Metadata filtering (detect resource/entity names in the question, filter or boost chunks from the matching source file)
-- [ ] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
+- [x] Query rewriting (reformulate natural-language questions into doc-like phrasing before retrieval)
 - [ ] Reranking (retrieve a larger candidate set, re-score with a cross-encoder or LLM call for relevance to the named entity)
 - [x] Evaluation harness (measure retrieval relevance / answer quality systematically)
 - [x] LLM-as-judge evaluation — implemented alongside keyword coverage; revealed a real quality gap (Model Monitor question) that keyword matching missed, and correctly handled graceful-failure cases that keyword matching under-scored
