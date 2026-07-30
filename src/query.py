@@ -52,6 +52,33 @@ def embed_text(bedrock, text):
     )
     result = json.loads(response["body"].read())
     return result["embedding"]
+    
+def rewrite_query(bedrock, question):
+    """
+    Reformulate the user's natural-language question into phrasing
+    closer to how technical documentation is written — bridging the
+    vocabulary gap between how people ask and how docs are worded.
+
+    Example:
+        "What arguments does aws_iam_role support?"
+        -> "aws_iam_role resource arguments required optional Terraform"
+    """
+    prompt = f"""Rewrite the following question into a concise search query optimized for retrieving relevant technical documentation. Use terminology and phrasing that would appear in the documentation itself rather than conversational language. Output only the rewritten query, nothing else.
+
+Question: {question}
+
+Rewritten query:"""
+
+    response = bedrock.invoke_model(
+        modelId=GENERATION_MODEL_ID,
+        body=json.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 100,
+            "messages": [{"role": "user", "content": prompt}],
+        }),
+    )
+    result = json.loads(response["body"].read())
+    return result["content"][0]["text"].strip()
 
 
 def fetch_neighbors(opensearch, chunk):
@@ -230,10 +257,12 @@ def main():
     args = parser.parse_args()
 
     bedrock, opensearch = get_clients()
-
-    print(f"Retrieving top {TOP_K} chunks (plus neighbors) for: {args.question}\n")
     ensure_search_pipeline(opensearch)
-    top_hits = hybrid_retrieve(opensearch, bedrock, args.question, k=8)
+
+    search_query = rewrite_query(bedrock, args.question)
+    print(f"Original:  {args.question}")
+    print(f"Rewritten: {search_query}\n")
+    top_hits = hybrid_retrieve(opensearch, bedrock, search_query, k=8)
 
     # Expand with neighbors, same logic as pure-vector retrieve()
     seen = {(c["file"], c["chunk_index"]) for c in top_hits}
