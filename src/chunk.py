@@ -8,6 +8,7 @@ Usage:
     python src/chunk.py
 """
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -38,7 +39,6 @@ def split_by_headers(text: str):
     parts = re.split(r"(?=^#{1,3} )", text, flags=re.MULTILINE)
     return [p.strip() for p in parts if p.strip()]
 
-
 def split_long_section(text: str):
     """Fallback: break an oversized section into overlapping windows."""
     if len(text) <= MAX_CHUNK_CHARS:
@@ -61,12 +61,14 @@ def chunk_file(path: Path, source: str):
 
     chunks = []
     for idx, piece in enumerate(pieces):
+        content_hash = hashlib.sha256(piece.encode("utf-8")).hexdigest()[:16]
         chunks.append({
             "source": source,
             "file": path.name,
             "text": piece,
             "chunk_index": idx,
             "total_chunks_in_file": len(pieces),
+            "content_hash": content_hash,
         })
     return chunks
 
