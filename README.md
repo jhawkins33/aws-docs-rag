@@ -83,7 +83,9 @@ git clone --depth 1 https://github.com/hashicorp/terraform-provider-aws.git data
 # 5. Build the pipeline
 python src/chunk.py
 python src/index.py --limit 5   # test on a small slice first
-python src/index.py             # full run (~2,835 chunks, 15-30 min)
+python src/index.py             # first run: indexes all 2,835 chunks (15-30 min)
+python src/index.py             # subsequent runs: skips already-indexed chunks (seconds)
+python src/index.py --full-rebuild  # force re-index everything
 
 # 6. Ask questions
 python src/query.py "How do I deploy a SageMaker model to a real-time endpoint?"
@@ -167,4 +169,4 @@ Query rewriting reformulates the user's natural-language question into doc-like 
 - [x] Evaluation harness (measure retrieval relevance / answer quality systematically)
 - [x] LLM-as-judge evaluation — implemented alongside keyword coverage; revealed a real quality gap (Model Monitor question) that keyword matching missed, and correctly handled graceful-failure cases that keyword matching under-scored
 - [x] Simple query interface (CLI polish or a minimal web UI)
-- [ ] Incremental re-indexing (currently full-rebuild only)
+- [x] Incremental re-indexing (currently full-rebuild only)
